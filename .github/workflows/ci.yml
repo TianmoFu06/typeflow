@@ -24,6 +24,8 @@ jobs:
             web/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm ci --prefix web --no-audit --no-fund
+      - name: Validate YAML syntax and formatting
+        run: web/node_modules/.bin/oxfmt --check .github/workflows/*.yml .github/dependabot.yml compose.yaml
       - run: npm test
       - run: npm run check
       - run: npm run build
