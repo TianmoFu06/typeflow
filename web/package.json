@@ -13,7 +13,7 @@
     "format": "oxfmt"
   },
   "dependencies": {
-    "react": "19.2.6",
+    "react": "19.2.8",
     "react-dom": "19.2.6",
     "react-server-dom-webpack": "19.2.6",
     "vinext": "1.0.0-beta.5",
@@ -39,7 +39,7 @@
     "@openai/sites-vite-plugin": "0.2.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
-    "@types/react": "19.2.14",
+    "@types/react": "19.2.18",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
