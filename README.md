@@ -73,6 +73,8 @@ cp .env.example .env
 bash scripts/deploy.sh
 ```
 
+`.env.example` 中的 `IMAGE` 故意留空。在 **Actions → Release → 成功的运行 → Summary** 复制 `Published image` 的完整值，填入服务器 `.env` 的 `IMAGE=` 后面。不要使用 `REPLACE_WITH_FULL_COMMIT_SHA`，也不要直接取尚未发布的最新 Git 提交。旧配置含有该占位符时，部署脚本会在拉取镜像前明确报错。
+
 容器默认只绑定 `127.0.0.1:3000`，配合现有 HTTPS 反向代理；示例见 `scripts/nginx.conf`。本地试用可设 `APP_ORIGIN=http://localhost:3000`。公网部署必须使用实际 HTTPS 来源并转发 WebSocket Upgrade。来源不匹配会拒绝比赛连接。
 
 部署脚本先验证配置、成功拉取镜像，再更新容器并等待健康检查（最长 90 秒）。失败直接退出并保留现场；不自动回滚、重启或绕过故障。部署切换会中止正在进行的内存比赛，请尽量选择低峰期。

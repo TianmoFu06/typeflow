@@ -6,6 +6,11 @@ docker compose version >/dev/null
 if [[ ! -f .env ]]; then echo 'Missing .env; copy .env.example and configure IMAGE and APP_ORIGIN.' >&2; exit 1; fi
 # Docker Compose reads .env as data, never source it as shell code.
 docker compose config --quiet
+image="$(docker compose config --images)"
+if [[ "$image" == *REPLACE_WITH* ]]; then
+  echo 'IMAGE still contains an example placeholder; set it to the published image reference from Actions > Release > Summary.' >&2
+  exit 1
+fi
 docker compose pull --policy always typeflow
 docker compose up --detach --wait --wait-timeout 90 --remove-orphans
 # No automatic rollback: a failed deployment remains visible for an operator to inspect.

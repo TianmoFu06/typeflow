@@ -1,3 +1,3 @@
 # Typeflow 工作状态
 
-- [TODO] 提交并推送 Actions 和页脚改动到 main，再核验 GitHub Actions；用户已明确授权推送及部署影响。
+- [TODO] 推送部署镜像占位符修复并确认 Actions 启动；实际服务器 .env 需由用户替换为已发布引用（本工作区无服务器配置）。
