@@ -155,7 +155,7 @@ export function createApp({
     return room.players.map((p) => ({
       id: p.id,
       name: p.name,
-      ...stats(room.text, p.text, elapsed, p.attempts, p.errors),
+      ...stats(room.text, p.text, elapsed),
     }));
   }
   function finish(room, reason) {
@@ -180,8 +180,6 @@ export function createApp({
       id,
       name: "",
       text: "",
-      attempts: 0,
-      errors: 0,
       room: null,
       alive: true,
       joined: false,
@@ -224,8 +222,6 @@ export function createApp({
           p.joined = true;
           p.name = `旅人 ${p.id.slice(0, 6)}`;
           p.text = "";
-          p.attempts = 0;
-          p.errors = 0;
           if (!waiting) {
             waiting = p;
             send(p, { type: "waiting", id: p.id });
@@ -269,10 +265,6 @@ export function createApp({
           value.length > p.text.length + 1
         )
           throw new Error("竞赛仅支持逐字输入或尾部删除");
-        if (value.length > p.text.length) {
-          p.attempts++;
-          if (value.at(-1) !== room.text[value.length - 1]) p.errors++;
-        }
         p.text = value;
         if (p.text.length === room.text.length) finish(room);
       } catch (error) {

@@ -18,8 +18,6 @@ export function stats(
   target: string,
   typed: string,
   elapsed: number,
-  attempts?: number,
-  errors?: number,
 ): {
   correct: number;
   wpm: number;

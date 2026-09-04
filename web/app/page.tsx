@@ -49,7 +49,7 @@ type Racer = {
   id: string;
   name: string;
   progress: number;
-  wpm: number;
+  cpm: number;
   accuracy: number;
 };
 type Race = {
@@ -77,8 +77,6 @@ export default function Home() {
   const [typed, setTyped] = useState('');
   const [draft, setDraft] = useState('');
   const composing = useRef(false);
-  const [attempts, setAttempts] = useState(0);
-  const [errors, setErrors] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [phase, setPhase] = useState<'ready' | 'running' | 'done'>('ready');
   const [records, setRecords] = useState<RecordItem[]>([]);
@@ -125,7 +123,7 @@ export default function Home() {
     [target, typed],
   );
   const untimed = !racing && duration === 0;
-  const result = stats(target, typed, elapsed, attempts, errors);
+  const result = stats(target, typed, elapsed);
   const remaining = racing
     ? (race.remaining ?? 60)
     : untimed
@@ -138,7 +136,7 @@ export default function Home() {
   snapshot.current = {
     mode: tab,
     phase,
-    wpm: racing ? (mine?.wpm ?? 0) : result.wpm,
+    cpm: racing ? (mine?.cpm ?? 0) : result.cpm,
     accuracy: racing ? (mine?.accuracy ?? 100) : result.accuracy,
     remaining: untimed ? null : remaining,
     elapsed,
@@ -351,8 +349,6 @@ export default function Home() {
     setTyped('');
     setDraft('');
     composing.current = false;
-    setAttempts(0);
-    setErrors(0);
     setElapsed(0);
     setPhase('ready');
     saved.current = false;
@@ -414,16 +410,7 @@ export default function Home() {
       !value.startsWith(typed.slice(0, Math.min(typed.length, value.length)))
     )
       return;
-    if (value.length > typed.length) {
-      const added = value.slice(typed.length);
-      setAttempts((a) => a + added.length);
-      setErrors(
-        (e) =>
-          e +
-          [...added].filter((c, i) => c !== target[typed.length + i]).length,
-      );
-      tick();
-    }
+    if (value.length > typed.length) tick();
     if (phase === 'ready') {
       start.current = now;
       setPhase('running');
@@ -591,8 +578,8 @@ export default function Home() {
             <div className="help">
               <strong>找到节奏，从准确开始</strong>
               <p>
-                直接输入开始计时，退格可修正，错误输入仍计入正确率。WPM 按每 5
-                个正确字符折算一词；中文同时显示每分钟字数。比赛为 60
+                直接输入开始计时。正确率只统计当前已输入的字符，退格修正后更新，未输入文字不参与计算。
+                CPM 为每分钟正确字符数，包含空格与标点。比赛为 60
                 秒英文竞速，以服务端成绩为准，断线即中止。记录仅保存在当前浏览器。
               </p>
               <button onClick={() => setHelp(false)}>
@@ -665,7 +652,7 @@ export default function Home() {
                   <div key={p.id}>
                     <span>
                       {p.id === race.id ? '你' : p.name}
-                      <b>{p.wpm} WPM</b>
+                      <b>{p.cpm} CPM</b>
                     </span>
                     <progress max={100} value={p.progress} />
                   </div>
@@ -804,14 +791,17 @@ export default function Home() {
                 <div className="metrics">
                   <div className="metric">
                     <span>
-                      <Zap size={15} /> 每分钟速度
+                      <Zap size={15} /> 每分钟字符数
                     </span>
                     <strong>
-                      {racing ? (mine?.wpm ?? 0) : result.wpm}
-                      <small>WPM</small>
+                      {racing ? (mine?.cpm ?? 0) : result.cpm}
+                      <small>CPM</small>
                     </strong>
                   </div>
-                  <div className="metric">
+                  <div
+                    className="metric"
+                    title="当前正确字符数 ÷ 已输入字符数；未输入文字不计入"
+                  >
                     <span>
                       <Crosshair size={15} /> 正确率
                     </span>
@@ -899,8 +889,8 @@ export default function Home() {
                       </strong>
                       <p>
                         {racing
-                          ? `${mine?.wpm ?? 0} WPM · 对手 ${opponent?.wpm ?? 0} WPM`
-                          : `${result.wpm} WPM · ${result.accuracy}% 正确率`}
+                          ? `${mine?.cpm ?? 0} CPM · 对手 ${opponent?.cpm ?? 0} CPM`
+                          : `${result.cpm} CPM · ${result.accuracy}% 正确率`}
                       </p>
                       <button
                         className="primary"
@@ -988,10 +978,7 @@ export default function Home() {
                           )}
                         </td>
                         <td>{r.duration}s</td>
-                        <td>
-                          {r.wpm} WPM
-                          {r.language === '中文' ? ` / ${r.cpm} 字每分` : ''}
-                        </td>
+                        <td>{r.cpm} CPM</td>
                         <td>{r.accuracy}%</td>
                       </tr>
                     ))}
@@ -1021,9 +1008,9 @@ export default function Home() {
                 <div>
                   <strong>
                     {records.length
-                      ? Math.max(...records.map((r) => r.wpm))
+                      ? Math.max(...records.map((r) => r.cpm))
                       : '—'}
-                    <small>WPM</small>
+                    <small>CPM</small>
                   </strong>
                   <span>最佳速度</span>
                 </div>

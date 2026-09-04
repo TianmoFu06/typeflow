@@ -1,20 +1,41 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { stats } from "../web/lib/typing.mjs";
-test("speed uses correct characters and real elapsed time; corrected mistakes remain in accuracy", () => {
-  assert.deepEqual(stats("hello world", "hello x", 30, 9, 2), {
+test("speed and accuracy use current entered characters and real elapsed time", () => {
+  assert.deepEqual(stats("hello world", "hello x", 30), {
     correct: 6,
     wpm: 2,
     cpm: 12,
-    accuracy: 78,
+    accuracy: 86,
     progress: 64,
   });
   assert.equal(stats("hello", "", 0).wpm, 0);
   assert.equal(stats("你好世界", "你好", 60).cpm, 2);
 });
 
+test("untouched suffix never affects accuracy; deleting and correcting a mistake updates it", () => {
+  for (const target of ["hello", "hello " + "world ".repeat(1000)]) {
+    assert.equal(stats(target, "h", 60).accuracy, 100);
+    assert.equal(stats(target, "hx", 60).accuracy, 50);
+    assert.equal(stats(target, "h", 60).accuracy, 100);
+    assert.equal(stats(target, "he", 60).accuracy, 100);
+    assert.equal(stats(target, "xx", 60).accuracy, 0);
+    assert.equal(stats(target, "", 0).accuracy, 100);
+  }
+});
+
+test("CPM counts characters, spaces and punctuation without five-character word conversion", () => {
+  assert.equal(stats("hello world", "hello ", 30).cpm, 12);
+  assert.equal(stats("const n = 1;", "const n = 1;", 60).cpm, 12);
+  assert.equal(stats("你好，世界", "你好，", 30).cpm, 6);
+  assert.equal(stats("a😀b", "a😀", 60).cpm, 2);
+  assert.equal(stats("hello", "hxl", 60).cpm, 2);
+});
+
 test("article library has distinct presets and preserves user-provided texts", async () => {
   const { passages, nextPassageIndex } = await import("../web/lib/typing.mjs");
+  assert.equal(passages.chinese[0].id, "xiake");
+  assert.equal(passages.chinese[0].title, "下课");
   const all = Object.values(passages).flat();
   assert.equal(all.length, 42);
   assert.equal(new Set(all.map((p) => p.id)).size, all.length);

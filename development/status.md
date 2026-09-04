@@ -1,6 +1,6 @@
 # Typeflow 工作状态
 
-当前无待办开发任务。
+- [TODO] 推送本轮指标优化，确认 GitHub CI 后归档。
 
-本轮完成记录见 development/typing-experience-2026-09-04.md；全文来源见 docs/article-sources.md。
-凭据由用户配置 GitHub Secrets；用户接管 registry 服务问题，本轮不继续诊断镜像上传。
+本地 16 项测试、类型检查及正式构建通过；记录见 development/typing-metrics-2026-09-04.md。
+凭据由用户配置 GitHub Secrets；本轮不诊断 registry。

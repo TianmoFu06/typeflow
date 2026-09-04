@@ -31,10 +31,10 @@ async function fixture(t, options = {}) {
     await once(ws, "open");
     if (name) ws.send(JSON.stringify({ type: "join", name }));
     t.after(() => ws.terminate());
-    async function wait(type) {
+    async function wait(type, predicate = () => true) {
       const end = Date.now() + 2000;
       while (Date.now() < end) {
-        const msg = messages.find((m) => m.type === type);
+        const msg = messages.find((m) => m.type === type && predicate(m));
         if (msg) return msg;
         await new Promise((r) => setTimeout(r, 10));
       }
@@ -162,4 +162,27 @@ test("missing browser credentials and duplicate browser connections are rejected
   await closed;
   const again = await player("A", a.identity);
   assert.equal((await again.wait("waiting")).id, a.identity.id);
+});
+
+test("live server scores exclude untouched text and update CPM after correction", async (t) => {
+  const { player } = await fixture(t, { duration: 2000 });
+  const a = await player("A");
+  await player("B");
+  const race = await a.wait("countdown");
+  await a.wait("running");
+  const score = async (correct, accuracy) => {
+    const message = await a.wait("running", (m) =>
+      m.players.some((p) => p.id === race.id && p.correct === correct && p.accuracy === accuracy),
+    );
+    return message.players.find((p) => p.id === race.id);
+  };
+  a.ws.send(JSON.stringify({ type: "input", text: race.text[0] }));
+  assert.ok((await score(1, 100)).cpm > 0);
+  a.ws.send(JSON.stringify({ type: "input", text: race.text[0] + "#" }));
+  assert.ok((await score(1, 50)).cpm > 0);
+  a.messages.length = 0;
+  a.ws.send(JSON.stringify({ type: "input", text: race.text[0] }));
+  await score(1, 100);
+  a.ws.send(JSON.stringify({ type: "input", text: race.text.slice(0, 2) }));
+  assert.ok((await score(2, 100)).cpm > 0);
 });
