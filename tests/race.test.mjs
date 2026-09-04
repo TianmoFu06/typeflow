@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { WebSocket } from "ws";
+import { passages } from "../web/lib/typing.mjs";
 import { createApp } from "../server/index.mjs";
 
 async function fixture(t, options = {}) {
@@ -39,6 +40,8 @@ test("two real clients match, share text, receive server-calculated results", as
   const ra = await a.wait("countdown"),
     rb = await b.wait("countdown");
   assert.equal(ra.text, rb.text);
+  assert.ok(passages.english.some((p) => ra.text.startsWith(p.text)));
+  assert.ok(ra.text.length >= 1500);
   await a.wait("running");
   a.ws.send(JSON.stringify({ type: "input", text: ra.text[0] }));
   const result = await a.wait("done");

@@ -19,7 +19,12 @@ import {
   X,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { passages, stats } from '@/lib/typing.mjs';
+import {
+  NativeSelect,
+  NativeSelectOption,
+  NativeSelectOptGroup,
+} from '@/components/ui/native-select';
+import { passages, nextPassageIndex, stats } from '@/lib/typing.mjs';
 
 type Language = keyof typeof passages;
 type RecordItem = {
@@ -29,6 +34,7 @@ type RecordItem = {
   cpm: number;
   language: string;
   duration: number;
+  title?: string;
 };
 type Racer = {
   id: string;
@@ -54,7 +60,8 @@ const languageNames: Record<Language, string> = {
 };
 export default function Home() {
   const [tab, setTab] = useState('practice');
-  const [language, setLanguage] = useState<Language>('english');
+  const [language, setLanguage] = useState<Language>('chinese');
+  const [passageIndex, setPassageIndex] = useState(1);
   const [duration, setDuration] = useState(30);
   const [typed, setTyped] = useState('');
   const [draft, setDraft] = useState('');
@@ -77,7 +84,9 @@ export default function Home() {
   const saved = useRef(false);
   const audio = useRef<AudioContext | null>(null);
   const racing = tab === 'race';
-  const target = racing && race.text ? race.text : passages[language].repeat(8);
+  const selectedPassage = passages[language][passageIndex];
+  const categories = [...new Set(passages[language].map((p) => p.category))];
+  const target = racing && race.text ? race.text : selectedPassage.text;
   const result = stats(target, typed, elapsed, attempts, errors);
   const remaining = racing
     ? (race.remaining ?? 60)
@@ -163,7 +172,8 @@ export default function Home() {
               !Number.isFinite(r.cpm) ||
               typeof r.language !== 'string' ||
               !Number.isFinite(r.duration) ||
-              typeof r.date !== 'string',
+              typeof r.date !== 'string' ||
+              (r.title !== undefined && typeof r.title !== 'string'),
           )
         )
           throw new Error('练习记录格式无效');
@@ -200,7 +210,8 @@ export default function Home() {
         cpm: result.cpm,
         accuracy: result.accuracy,
         language: languageNames[language],
-        duration,
+        duration: Math.max(1, Math.round(elapsed)),
+        title: selectedPassage.title,
       },
       ...records,
     ].slice(0, 50);
@@ -220,6 +231,8 @@ export default function Home() {
     records,
     language,
     duration,
+    elapsed,
+    selectedPassage.title,
   ]);
   useEffect(() => {
     current.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -546,6 +559,7 @@ export default function Home() {
                         }
                         onClick={() => {
                           setLanguage(l);
+                          setPassageIndex(0);
                           reset();
                         }}
                       >
@@ -562,6 +576,57 @@ export default function Home() {
                     {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
                   </button>
                 </div>
+                {!racing && (
+                  <div className="article-bar">
+                    <div className="article-choice">
+                      <label htmlFor="passage-select">
+                        文章库 <span>{passages[language].length} 篇</span>
+                      </label>
+                      <NativeSelect
+                        id="passage-select"
+                        className="article-select"
+                        value={passageIndex}
+                        disabled={phase === 'running'}
+                        onChange={(e) => {
+                          setPassageIndex(Number(e.target.value));
+                          reset();
+                        }}
+                      >
+                        {categories.map((category) => (
+                          <NativeSelectOptGroup key={category} label={category}>
+                            {passages[language].map(
+                              (p, i) =>
+                                p.category === category && (
+                                  <NativeSelectOption key={p.id} value={i}>
+                                    {p.title}
+                                  </NativeSelectOption>
+                                ),
+                            )}
+                          </NativeSelectOptGroup>
+                        ))}
+                      </NativeSelect>
+                      <button
+                        className="shuffle-passage"
+                        disabled={phase === 'running'}
+                        onClick={() => {
+                          setPassageIndex(
+                            nextPassageIndex(
+                              passages[language].length,
+                              passageIndex,
+                            ),
+                          );
+                          reset();
+                        }}
+                      >
+                        <RotateCcw size={14} /> 换一篇
+                      </button>
+                    </div>
+                    <p>
+                      {selectedPassage.source} · {selectedPassage.text.length}{' '}
+                      字符<span>输完全文或时间结束后结算</span>
+                    </p>
+                  </div>
+                )}
                 <div className="metrics">
                   <div className="metric">
                     <span>
@@ -634,6 +699,10 @@ export default function Home() {
                     onCompositionStart={() => {
                       composing.current = true;
                       setDraft(typed);
+                      if (!racing && phase === 'ready') {
+                        start.current = performance.now();
+                        setPhase('running');
+                      }
                     }}
                     onCompositionEnd={(e) => {
                       composing.current = false;
@@ -750,7 +819,12 @@ export default function Home() {
                     {records.map((r, i) => (
                       <tr key={i}>
                         <td>{new Date(r.date).toLocaleString('zh-CN')}</td>
-                        <td>{r.language}</td>
+                        <td>
+                          {r.language}
+                          {r.title && (
+                            <small className="history-title">{r.title}</small>
+                          )}
+                        </td>
                         <td>{r.duration}s</td>
                         <td>
                           {r.wpm} WPM

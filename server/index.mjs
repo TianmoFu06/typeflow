@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import { passages, stats } from "../web/lib/typing.mjs";
 
@@ -185,9 +185,10 @@ export function createApp({
           const other = waiting;
           waiting = undefined;
           // ponytail: single-process matchmaking; use a shared coordinator before adding replicas.
+          const article = passages.english[randomInt(passages.english.length)];
           const room = {
             players: [other, p],
-            text: passages.english.repeat(6),
+            text: (article.text + " ").repeat(Math.ceil(1500 / (article.text.length + 1))),
             start: now + countdown,
           };
           rooms.add(room);
