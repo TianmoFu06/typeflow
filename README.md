@@ -50,7 +50,7 @@ APP_ORIGIN=http://localhost:3000 NODE_ENV=production npm start
 
 确保账号有 `typeflow` 镜像路径的推送权限，registry 提供有效 HTTPS 证书且 GitHub 托管 runner 可以访问。
 
-CI 对 PR 和 main 提交执行测试、类型检查、构建、ShellCheck、Compose 校验、Docker 构建和容器健康／首页检查。只有本仓库 main 的 push CI 成功才会自动触发 Release；PR 不发布。
+CI 对 PR 和 main 提交执行 YAML 语法／格式检查、测试、类型检查、构建、ShellCheck、Compose 校验、Docker 构建和容器健康／首页检查。只有本仓库 main 的 push CI 成功才会自动触发 Release；PR 不发布。
 
 Release 构建 `linux/amd64` 和 `linux/arm64` 镜像，上传 SBOM 与来源证明，以完整提交 SHA 打标签：
 

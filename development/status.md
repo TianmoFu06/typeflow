@@ -1,6 +1,5 @@
 # Typeflow 工作状态
 
-- [TODO] 验证修复后的 Release 工作流可正常运行并明确报告缺失凭据。
 
 - [TODO] 用户配置 REGISTRY_USERNAME、REGISTRY_PASSWORD 后运行 Release，确认 registry.huangyut1ng.com/typeflow 镜像上传成功。
 - [TODO] 如启用服务器 CD，用户配置 README 所列 SSH Secrets 和 APP_ORIGIN、DEPLOY_ENABLED 后执行部署验证。
