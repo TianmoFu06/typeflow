@@ -1,0 +1,51 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix web --no-audit --no-fund
+      - run: npm test
+      - run: npm run check
+      - run: npm run build
+      - name: Validate deployment scripts
+        run: |
+          bash -n scripts/*.sh
+          shellcheck scripts/*.sh
+          IMAGE=typeflow:test APP_ORIGIN=http://localhost:3000 docker compose config --quiet
+      - name: Container build and smoke test
+        run: |
+          docker build --tag typeflow:test .
+          docker run --detach --name typeflow-test --publish 3000:3000 --env APP_ORIGIN=http://localhost:3000 --read-only --cap-drop ALL typeflow:test
+          for delay in 1 2 4 8 16; do
+            sleep "$delay"
+            state=$(docker inspect --format='{{.State.Health.Status}}' typeflow-test)
+            if [ "$state" = healthy ]; then break; fi
+            if [ "$state" = unhealthy ]; then docker logs typeflow-test; exit 1; fi
+          done
+          test "$state" = healthy
+          curl --fail http://localhost:3000/api/health
+          curl --fail http://localhost:3000/ --output /tmp/page.html
+          test -s /tmp/page.html
+      - name: Container logs
+        if: failure()
+        run: docker logs typeflow-test

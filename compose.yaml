@@ -1,0 +1,26 @@
+services:
+  typeflow:
+    image: ${IMAGE:?Set IMAGE to an immutable registry digest or commit tag}
+    init: true
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to the exact public origin}
+      PORT: "3000"
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    cpus: 1.0
+    stop_grace_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

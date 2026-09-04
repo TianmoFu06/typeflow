@@ -1,0 +1,19 @@
+{
+  "name": "typeflow",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "node server/index.mjs",
+    "build": "npm --prefix web run build",
+    "start": "node server/index.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node web/node_modules/typescript/bin/tsc --project web/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "ws": "8.21.3"
+  }
+}
