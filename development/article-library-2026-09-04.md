@@ -6,3 +6,4 @@
 - 环境检查：registry 两个 Secrets 已存在；仓库 Variables 为空，未启用可选 SSH 自动部署。
 - [DONE] 最终本机 6 项测试、TypeScript 检查、生产静态导出和 diff 检查通过。
 - 待验证：推送后的 CI 与 Release。
+- [DONE] 竞赛待匹配时仅展示等待提示，不再混入自由练习选择的中文文本。

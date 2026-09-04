@@ -86,7 +86,7 @@ export default function Home() {
   const racing = tab === 'race';
   const selectedPassage = passages[language][passageIndex];
   const categories = [...new Set(passages[language].map((p) => p.category))];
-  const target = racing && race.text ? race.text : selectedPassage.text;
+  const target = racing ? (race.text ?? '') : selectedPassage.text;
   const result = stats(target, typed, elapsed, attempts, errors);
   const remaining = racing
     ? (race.remaining ?? 60)
@@ -760,9 +760,11 @@ export default function Home() {
                 <div className="typing-bottom">
                   <span id="typing-hint">
                     <span className="small-dot" />
-                    {focused
-                      ? '保持专注，你做得很好'
-                      : '点击文字区域，开始输入'}
+                    {racing && !race.text
+                      ? '匹配成功后，双方将收到同一篇文章'
+                      : focused
+                        ? '保持专注，你做得很好'
+                        : '点击文字区域，开始输入'}
                   </span>
                   <button
                     className="restart"
