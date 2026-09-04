@@ -1,0 +1,178 @@
+[
+  {
+    "id": "kang-live",
+    "title": "康神开播了？",
+    "language": "chinese",
+    "sourceFile": "康神开播了.txt",
+    "length": 83,
+    "sha256": "fc8bc50365529e3b1a1d3603fc7530ed6c170eb6e0f2719be5f9298a04297bca"
+  },
+  {
+    "id": "xuzhou",
+    "title": "优势在我",
+    "language": "chinese",
+    "sourceFile": "优势在我.txt",
+    "length": 768,
+    "sha256": "98ddfb5d3423059a68749e42eb357be25943b4f4f3ce5fccde07b887432b8328"
+  },
+  {
+    "id": "xiake",
+    "title": "下课",
+    "language": "chinese",
+    "sourceFile": "下课.txt",
+    "length": 225,
+    "sha256": "a3e5c0e71f2f319a66f458a45264a8363241e47a4d6a10a954c1e575ddd462e0"
+  },
+  {
+    "id": "song-counting-stars",
+    "title": "Counting Stars",
+    "language": "english",
+    "sourceFile": "src/en/counting_stars",
+    "length": 1806,
+    "sha256": "885ffe5066107e1aa0b1ba1e7a3762ac1abfc1ccd0e206024123a6fad5474a6b"
+  },
+  {
+    "id": "song-hey-jude",
+    "title": "Hey Jude",
+    "language": "english",
+    "sourceFile": "src/en/hey_jude",
+    "length": 1009,
+    "sha256": "2b60451f4384c17110f56fe2250d2dbb452178861ca4cfde55e98533ecafb45b"
+  },
+  {
+    "id": "song-七里香",
+    "title": "七里香",
+    "language": "chinese",
+    "sourceFile": "src/cn/七里香",
+    "length": 439,
+    "sha256": "61fe808a637acae3dd54f3d62f882ac5dedd72a9d8cbb839929e903e591851b1"
+  },
+  {
+    "id": "song-光辉岁月",
+    "title": "光辉岁月",
+    "language": "chinese",
+    "sourceFile": "src/cn/光辉岁月",
+    "length": 372,
+    "sha256": "28b4f88e2b2ae9d12d5a6df8b9598fa74eb9ee8df46ffd9beba202f6e391d1e2"
+  },
+  {
+    "id": "song-夜曲",
+    "title": "夜曲",
+    "language": "chinese",
+    "sourceFile": "src/cn/夜曲",
+    "length": 660,
+    "sha256": "2bf2a83594fa588a763a73bb2ff928019c743cbe7b1dbfe054a1fff6cafa66ff"
+  },
+  {
+    "id": "song-大城小爱",
+    "title": "大城小爱",
+    "language": "chinese",
+    "sourceFile": "src/cn/大城小爱",
+    "length": 539,
+    "sha256": "91728b7d02c8988866ecffb38226cddd9b047e69c6d98b37da7f8e9459f88976"
+  },
+  {
+    "id": "song-富士山下",
+    "title": "富士山下",
+    "language": "chinese",
+    "sourceFile": "src/cn/富士山下",
+    "length": 607,
+    "sha256": "33cc34602437fbb7b11c95ab5ed091ce40fce8307f5e3deef01f1a1d0bb454f7"
+  },
+  {
+    "id": "song-小半",
+    "title": "小半",
+    "language": "chinese",
+    "sourceFile": "src/cn/小半",
+    "length": 649,
+    "sha256": "fa5a5b76c8b7bd3d561a04dc7d36e6f8ea1b41ea8baacc23e32b0f44065dddea"
+  },
+  {
+    "id": "song-开始懂了",
+    "title": "开始懂了",
+    "language": "chinese",
+    "sourceFile": "src/cn/开始懂了",
+    "length": 375,
+    "sha256": "fbd6019002fb50514201331fa4ea8796bf0c584ba664b7ba8d75c4025a2d31e0"
+  },
+  {
+    "id": "song-我怀念的",
+    "title": "我怀念的",
+    "language": "chinese",
+    "sourceFile": "src/cn/我怀念的",
+    "length": 580,
+    "sha256": "cda2a8aa17e1a44ab7807a564ae1fd67cf9beab5ad6d2d9eb915a752b6db5eec"
+  },
+  {
+    "id": "song-晴天",
+    "title": "晴天",
+    "language": "chinese",
+    "sourceFile": "src/cn/晴天",
+    "length": 575,
+    "sha256": "9c79451dc6e5bfc812e970ceeebfd0d2c8c8592901e4a70f9edf409f4e44a79c"
+  },
+  {
+    "id": "song-海阔天空",
+    "title": "海阔天空",
+    "language": "chinese",
+    "sourceFile": "src/cn/海阔天空",
+    "length": 396,
+    "sha256": "3e964abf734a81fdb35dcdc0dad6b214678fa3324ece57a2f062c59dbdcd2795"
+  },
+  {
+    "id": "song-游京",
+    "title": "游京",
+    "language": "chinese",
+    "sourceFile": "src/cn/游京",
+    "length": 357,
+    "sha256": "6d4cd93c80715b41bfd5d3285b11c90e64da1e8c05234073521147db7cd66676"
+  },
+  {
+    "id": "song-爱情讯息",
+    "title": "爱情讯息",
+    "language": "chinese",
+    "sourceFile": "src/cn/爱情讯息",
+    "length": 553,
+    "sha256": "5cccbe35ef8b5b8de97818be811d468536b172472a3679c00c3731af47b19b57"
+  },
+  {
+    "id": "song-稻香",
+    "title": "稻香",
+    "language": "chinese",
+    "sourceFile": "src/cn/稻香",
+    "length": 495,
+    "sha256": "d4307a980bec54a4a699c8cfb5ce97c4d6cbf51e9ac90bcd7c74b64b97cdc7d7"
+  },
+  {
+    "id": "song-红豆",
+    "title": "红豆",
+    "language": "chinese",
+    "sourceFile": "src/cn/红豆",
+    "length": 350,
+    "sha256": "1fc4f555ab60c2ffd222e8b7692c5657659074f32ede76b2f427fc6952f89c7b"
+  },
+  {
+    "id": "song-美人鱼",
+    "title": "美人鱼",
+    "language": "chinese",
+    "sourceFile": "src/cn/美人鱼",
+    "length": 485,
+    "sha256": "219ba2ea3df995403a9e740c50f6a997b9eca349641accca64aadcb94ab7b2dd"
+  },
+  {
+    "id": "song-走马",
+    "title": "走马",
+    "language": "chinese",
+    "sourceFile": "src/cn/走马",
+    "length": 556,
+    "sha256": "dcbdbbaaf564310210ac5224c295bf53c08cd5f89e8860b81ed80ebd39c3ad4a"
+  },
+  {
+    "id": "song-青花瓷",
+    "title": "青花瓷",
+    "language": "chinese",
+    "sourceFile": "src/cn/青花瓷",
+    "length": 457,
+    "sha256": "e4b96241285c511df60afdd5237ee3fd64a4f84674aa7f97868c5bf9484666b3"
+  }
+]

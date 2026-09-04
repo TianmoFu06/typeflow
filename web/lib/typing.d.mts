@@ -34,3 +34,7 @@ export function displayCharacter(
   expected: string,
   actual: string | undefined,
 ): string;
+
+export function progressSeries(
+  records: ReadonlyArray<{ cpm: number }>,
+): { practice: number; cpm: number }[];

@@ -10,3 +10,4 @@ dist/
 .vinext/
 coverage/
 *.tsbuildinfo
+src

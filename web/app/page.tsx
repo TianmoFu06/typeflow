@@ -19,6 +19,12 @@ import {
   X,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
 import {
   Combobox,
   ComboboxInput,
@@ -33,6 +39,7 @@ import {
   stats,
   practiceClock,
   displayCharacter,
+  progressSeries,
 } from '@/lib/typing.mjs';
 
 type Language = keyof typeof passages;
@@ -955,6 +962,76 @@ export default function Home() {
               </h1>
               <p>你的进步轨迹，仅保存在此浏览器中。</p>
             </div>
+            {records.length > 0 && (
+              <section
+                className="progress-panel"
+                aria-labelledby="progress-heading"
+              >
+                <h2 id="progress-heading">
+                  <Activity size={19} /> 打字速度趋势
+                </h2>
+                <p>
+                  最近 {records.length} 次练习 · 从旧到新 ·
+                  不同内容的速度仅供参考
+                </p>
+                <div className="progress-axis-label">打字速度（CPM）</div>
+                <ChartContainer
+                  className="progress-chart"
+                  config={{
+                    cpm: { label: '打字速度', color: 'var(--accent)' },
+                  }}
+                  aria-label="最近练习的打字速度折线图，详细成绩见下方表格"
+                >
+                  <LineChart
+                    accessibilityLayer
+                    data={progressSeries(records)}
+                    margin={{ top: 12, right: 20, bottom: 12, left: 0 }}
+                  >
+                    <CartesianGrid
+                      vertical={false}
+                      stroke="var(--border)"
+                      strokeDasharray="3 5"
+                    />
+                    <XAxis
+                      dataKey="practice"
+                      tickLine={false}
+                      axisLine={false}
+                      minTickGap={24}
+                    />
+                    <YAxis
+                      domain={[0, 'auto']}
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      width={48}
+                    />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          labelFormatter={(value) => `第 ${String(value)} 次练习`}
+                          formatter={(value) => `${String(value)} CPM`}
+                        />
+                      }
+                    />
+                    <Line
+                      dataKey="cpm"
+                      type="linear"
+                      stroke="var(--color-cpm)"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: 'var(--color-cpm)' }}
+                      activeDot={{ r: 5 }}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                </ChartContainer>
+                <div className="progress-axis-label progress-x-label">
+                  练习序号（最近记录内）
+                </div>
+                {records.length === 1 && (
+                  <p>已记录第一个速度点，再完成一次练习即可连成曲线。</p>
+                )}
+              </section>
+            )}
             <div className="history-table">
               {records.length ? (
                 <table>

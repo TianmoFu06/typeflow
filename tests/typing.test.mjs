@@ -1,5 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { progressSeries } from "../web/lib/typing.mjs";
+
+test("progress plots saved CPM from oldest to newest without changing history", () => {
+  assert.deepEqual(progressSeries([]), []);
+  assert.deepEqual(progressSeries([{ cpm: 0 }]), [{ practice: 1, cpm: 0 }]);
+  const records = Object.freeze(
+    Array.from({ length: 50 }, (_, i) => Object.freeze({ cpm: 150 - i })),
+  );
+  const points = progressSeries(records);
+  assert.equal(points.length, 50);
+  assert.deepEqual(points[0], { practice: 1, cpm: 101 });
+  assert.deepEqual(points[49], { practice: 50, cpm: 150 });
+  assert.equal(records[0].cpm, 150);
+  assert.deepEqual(progressSeries([{ cpm: 80 }, { cpm: 120 }]), [
+    { practice: 1, cpm: 120 },
+    { practice: 2, cpm: 80 },
+  ]);
+});
 import { stats } from "../web/lib/typing.mjs";
 test("speed and accuracy use current entered characters and real elapsed time", () => {
   assert.deepEqual(stats("hello world", "hello x", 30), {
@@ -37,7 +55,9 @@ test("article library has distinct presets and preserves user-provided texts", a
   assert.equal(passages.chinese[0].id, "xiake");
   assert.equal(passages.chinese[0].title, "下课");
   const all = Object.values(passages).flat();
-  assert.equal(all.length, 42);
+  assert.equal(all.length, 61);
+  assert.equal(passages.chinese.length, 48);
+  assert.equal(passages.english.length, 8);
   assert.equal(new Set(all.map((p) => p.id)).size, all.length);
   assert.equal(new Set(all.map((p) => p.text)).size, all.length);
   for (const article of all) {
@@ -45,14 +65,20 @@ test("article library has distinct presets and preserves user-provided texts", a
       assert.ok(article[field].trim());
   }
   const { readFile } = await import("node:fs/promises");
-  for (const [id, file] of [
-    ["kang-live", "康神开播了.txt"],
-    ["xuzhou", "优势在我.txt"],
-    ["xiake", "下课.txt"],
-  ]) {
-    const original = await readFile(new URL("../" + file, import.meta.url), "utf8");
-    assert.equal(passages.chinese.find((p) => p.id === id).text, original.replace(/\s/g, ""));
+  const { createHash } = await import("node:crypto");
+  const supplied = JSON.parse(
+    await readFile(new URL("./fixtures/user-articles.json", import.meta.url), "utf8"),
+  );
+  assert.equal(supplied.length, 22);
+  for (const source of supplied) {
+    const article = passages[source.language].find((p) => p.id === source.id);
+    assert.ok(article, source.id);
+    assert.equal(article.title, source.title);
+    assert.equal(article.text.length, source.length, source.id);
+    assert.equal(createHash("sha256").update(article.text).digest("hex"), source.sha256, source.id);
   }
+  assert.match(passages.chinese.find((p) => p.id === "kang-live").text, /明天再玩/);
+  assert.doesNotMatch(passages.chinese.find((p) => p.id === "kang-live").text, /明天在玩/);
   for (const list of Object.values(passages)) {
     for (let current = 0; current < list.length; current++) {
       for (const random of [0, 0.5, 0.99999]) {

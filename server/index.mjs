@@ -42,6 +42,7 @@ export function createApp({
     if (player.ws.readyState === WebSocket.OPEN) player.ws.send(JSON.stringify(data));
   };
   const server = createServer(async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
     res.setHeader("X-Frame-Options", "DENY");
@@ -111,9 +112,9 @@ export function createApp({
       };
       res.writeHead(200, {
         "Content-Type": types[extname(file)] ?? "application/octet-stream",
-        "Cache-Control": file.includes("/assets/")
+        "Cache-Control": pathname.startsWith("/assets/")
           ? "public, max-age=31536000, immutable"
-          : "no-cache",
+          : "public, max-age=0, s-maxage=60, must-revalidate",
       });
       res.end(req.method === "HEAD" ? undefined : await readFile(file));
     } catch (error) {
