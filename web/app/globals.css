@@ -597,6 +597,16 @@ footer {
 footer > span:nth-child(2) {
   margin-right: auto;
 }
+.footer-repo {
+  color: inherit;
+  white-space: nowrap;
+  text-underline-offset: 3px;
+}
+.footer-repo:hover,
+.footer-repo:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+}
 .footer-star {
   color: #b5d385;
   font-size: 21px;

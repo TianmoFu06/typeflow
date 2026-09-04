@@ -1069,6 +1069,14 @@ export default function Home() {
       <footer>
         <span className="footer-brand">typeflow.</span>
         <span>少一点分心，多一点心流。</span>
+        <a
+          className="footer-repo"
+          href="https://github.com/TianmoFu06/typeflow"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub ↗
+        </a>
         <span>
           BUILT FOR YOUR FLOW <span className="footer-star">✳</span>
         </span>

@@ -11,24 +11,32 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
+    name: 测试、检查与容器验证
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - name: 检出项目源码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 配置 Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: |
             package-lock.json
             web/package-lock.json
-      - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm ci --prefix web --no-audit --no-fund
+      - name: 安装服务端依赖
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: 安装前端依赖
+        run: npm ci --prefix web --no-audit --no-fund
       - name: Validate YAML syntax and formatting
         run: web/node_modules/.bin/oxfmt --check .github/workflows/*.yml .github/dependabot.yml compose.yaml
-      - run: npm test
-      - run: npm run check
-      - run: npm run build
+      - name: 运行测试
+        run: npm test
+      - name: 检查 TypeScript 类型
+        run: npm run check
+      - name: 构建网站
+        run: npm run build
       - name: Validate deployment scripts
         run: |
           bash -n scripts/*.sh

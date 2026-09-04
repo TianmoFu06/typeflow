@@ -1,4 +1,5 @@
 name: Release
+run-name: "发布 · ${{ github.event.workflow_run.display_title || format('手动发布 {0}', github.ref_name) }}"
 on:
   workflow_run:
     workflows: [CI]
@@ -12,13 +13,15 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
+    name: 构建与发布镜像
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
       image: ${{ steps.image.outputs.value }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 检出项目源码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Validate registry credentials
@@ -29,7 +32,8 @@ jobs:
           test -n "$REGISTRY_USERNAME" || { echo 'Configure REGISTRY_USERNAME secret'; exit 1; }
           test -n "$REGISTRY_PASSWORD" || { echo 'Configure REGISTRY_PASSWORD secret'; exit 1; }
           test "$GITHUB_REF" = refs/heads/main || { echo 'Only main may be released'; exit 1; }
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - name: 配置 Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - name: Verify exact release source
@@ -38,9 +42,12 @@ jobs:
           npm ci --prefix web --no-audit --no-fund
           npm test
           npm run check
-      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - name: 配置多架构模拟器
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - name: 配置 Docker 构建器
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 登录镜像仓库
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: registry.huangyut1ng.com
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -48,7 +55,8 @@ jobs:
       - name: Immutable image tag
         id: tag
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      - name: 构建并推送多架构镜像
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         id: build
         with:
           context: .
@@ -59,7 +67,8 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
-      - id: image
+      - name: 记录部署镜像摘要
+        id: image
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: echo "value=registry.huangyut1ng.com/typeflow@$DIGEST" >> "$GITHUB_OUTPUT"
@@ -69,13 +78,15 @@ jobs:
         run: |
           echo "Published image: \`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
   deploy:
+    name: 部署生产环境
     needs: publish
     if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 检出项目源码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Deploy immutable image over SSH
