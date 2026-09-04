@@ -7,3 +7,5 @@
 - [DONE] 最终本机 6 项测试、TypeScript 检查、生产静态导出和 diff 检查通过。
 - 待验证：推送后的 CI 与 Release。
 - [DONE] 竞赛待匹配时仅展示等待提示，不再混入自由练习选择的中文文本。
+- [DONE] 核实并接入 19 篇公版全文／完整章节（24,564 字符），来源与完整性散列见 docs/article-sources.md、tests/fixtures/article-sources.json；2026-09-04。
+- [DONE] 按用户要求停止 registry 排查，撤去尚未提交的额外探测步骤；镜像凭据由用户配置 GitHub Secrets。

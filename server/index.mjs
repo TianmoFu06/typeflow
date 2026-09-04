@@ -2,9 +2,27 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID, randomInt } from "node:crypto";
+import { randomBytes, createHash, randomInt } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import { passages, stats } from "../web/lib/typing.mjs";
+
+// A private 256-bit browser token derives a stable public UUID. Public race IDs
+// cannot be used as credentials, and identity survives server restarts without a DB.
+function browserToken(req) {
+  const token = req.headers.cookie
+    ?.split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("typeflow_browser="))
+    ?.slice(17);
+  return /^[a-f0-9]{64}$/.test(token ?? "") ? token : null;
+}
+function browserId(token) {
+  const bytes = createHash("sha256").update(token).digest().subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 export function createApp({
   duration = 60_000,
@@ -35,6 +53,23 @@ export function createApp({
     if (req.method !== "GET" && req.method !== "HEAD") {
       res.writeHead(405, { Allow: "GET, HEAD" });
       res.end("Method not allowed");
+      return;
+    }
+    if (req.url === "/api/session") {
+      const expected = origin ?? `http://${req.headers.host}`;
+      if (req.headers.origin && req.headers.origin !== expected) {
+        res.writeHead(403);
+        res.end("Cross-origin session request denied");
+        return;
+      }
+      const token = browserToken(req) ?? randomBytes(32).toString("hex");
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        Vary: "Cookie",
+        "Set-Cookie": `typeflow_browser=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000${expected.startsWith("https:") ? "; Secure" : ""}`,
+      });
+      res.end(req.method === "HEAD" ? undefined : JSON.stringify({ id: browserId(token) }));
       return;
     }
     if (req.url === "/api/health") {
@@ -103,7 +138,17 @@ export function createApp({
       socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       return;
     }
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+    const token = browserToken(req);
+    if (!token) {
+      socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+      return;
+    }
+    const id = browserId(token);
+    if (players.has(id)) {
+      socket.end("HTTP/1.1 409 Conflict\r\nConnection: close\r\n\r\n");
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req, id));
   });
   function summary(room, now) {
     const elapsed = Math.min(duration, Math.max(0, now - room.start)) / 1000;
@@ -120,6 +165,7 @@ export function createApp({
     const winner = a.correct === b.correct ? null : a.correct > b.correct ? a.id : b.id;
     for (const p of room.players) {
       p.room = null;
+      p.joined = false;
       send(
         p,
         reason
@@ -128,10 +174,10 @@ export function createApp({
       );
     }
   }
-  wss.on("connection", (ws, req) => {
+  wss.on("connection", (ws, req, id) => {
     const p = {
       ws,
-      id: randomUUID(),
+      id,
       name: "",
       text: "",
       attempts: 0,
@@ -139,11 +185,11 @@ export function createApp({
       room: null,
       alive: true,
       joined: false,
-      connected: Date.now(),
       window: Date.now(),
       messages: 0,
     };
     players.set(p.id, p);
+    send(p, { type: "connected", id: p.id });
     ws.on("pong", () => {
       p.alive = true;
     });
@@ -166,17 +212,20 @@ export function createApp({
         if (++p.messages > 80) throw new Error("输入频率超过限制");
         payload = JSON.parse(raw.toString());
         if (!payload || typeof payload !== "object") throw new Error("消息必须为对象");
+        if (payload.type === "leave") {
+          if (waiting === p) waiting = undefined;
+          if (p.room) finish(p.room, "玩家取消了比赛，请重新匹配。");
+          p.joined = false;
+          send(p, { type: "idle", id: p.id });
+          return;
+        }
         if (payload.type === "join") {
-          if (p.joined) throw new Error("请重新连接后开始下一场比赛");
-          if (
-            typeof payload.name !== "string" ||
-            !payload.name.trim() ||
-            payload.name.length > 20 ||
-            /[\x00-\x1f\x7f]/.test(payload.name)
-          )
-            throw new Error("昵称必须为 1–20 个可见字符");
+          if (p.joined) throw new Error("你已在匹配队列或比赛中");
           p.joined = true;
-          p.name = payload.name.trim();
+          p.name = `旅人 ${p.id.slice(0, 6)}`;
+          p.text = "";
+          p.attempts = 0;
+          p.errors = 0;
           if (!waiting) {
             waiting = p;
             send(p, { type: "waiting", id: p.id });
@@ -250,8 +299,6 @@ export function createApp({
             };
       for (const p of room.players) send(p, data);
     }
-    for (const p of players.values())
-      if (!p.joined && now - p.connected > 10_000) p.ws.close(1008, "Join timeout");
   }, tick);
   const heartbeat = setInterval(() => {
     for (const p of players.values()) {

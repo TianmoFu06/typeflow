@@ -1,9 +1,5 @@
 # Typeflow 工作状态
 
-- [TODO] 推送修改，验证本次 CI、镜像发布及已配置的 CD。
+- [TODO] 验证全文、输入和双客户端协议，构建并推送，确认最终提交 CI。
 
-
-- [TODO] 用户配置 REGISTRY_USERNAME、REGISTRY_PASSWORD 后运行 Release，确认 registry.huangyut1ng.com/typeflow 镜像上传成功。
-- [TODO] 如启用服务器 CD，用户配置 README 所列 SSH Secrets 和 APP_ORIGIN、DEPLOY_ENABLED 后执行部署验证。
-
-部署目标按用户指定采用 Docker 和自有 registry；不创建额外 Sites 云部署。
+凭据由用户配置 GitHub Secrets；用户接管 registry 服务问题，本轮不继续诊断镜像上传。

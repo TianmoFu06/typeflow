@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   ArrowRight,
@@ -20,11 +20,20 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  NativeSelect,
-  NativeSelectOption,
-  NativeSelectOptGroup,
-} from '@/components/ui/native-select';
-import { passages, nextPassageIndex, stats } from '@/lib/typing.mjs';
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from '@/components/ui/combobox';
+import {
+  passages,
+  nextPassageIndex,
+  stats,
+  practiceClock,
+  displayCharacter,
+} from '@/lib/typing.mjs';
 
 type Language = keyof typeof passages;
 type RecordItem = {
@@ -61,8 +70,10 @@ const languageNames: Record<Language, string> = {
 export default function Home() {
   const [tab, setTab] = useState('practice');
   const [language, setLanguage] = useState<Language>('chinese');
-  const [passageIndex, setPassageIndex] = useState(1);
-  const [duration, setDuration] = useState(30);
+  const [passageIndex, setPassageIndex] = useState(
+    passages.chinese.findIndex((p) => p.id === 'yueyang'),
+  );
+  const [duration, setDuration] = useState(0);
   const [typed, setTyped] = useState('');
   const [draft, setDraft] = useState('');
   const composing = useRef(false);
@@ -75,7 +86,13 @@ export default function Home() {
   const [focused, setFocused] = useState(false);
   const [sound, setSound] = useState(false);
   const [help, setHelp] = useState(false);
-  const [name, setName] = useState('');
+  const session = useRef<Promise<{ id: string }> | null>(null);
+  const matchIntent = useRef(false);
+  const matchRequest = useRef(0);
+  const leaving = useRef(false);
+  const passage = useRef<HTMLDivElement>(null);
+  const scrollAnimation = useRef(0);
+  const scrollDestination = useRef(0);
   const [race, setRace] = useState<Race>({ type: 'idle' });
   const input = useRef<HTMLTextAreaElement>(null);
   const current = useRef<HTMLSpanElement>(null);
@@ -85,12 +102,35 @@ export default function Home() {
   const audio = useRef<AudioContext | null>(null);
   const racing = tab === 'race';
   const selectedPassage = passages[language][passageIndex];
-  const categories = [...new Set(passages[language].map((p) => p.category))];
   const target = racing ? (race.text ?? '') : selectedPassage.text;
+  const passageCharacters = useMemo(
+    () =>
+      target.split('').map((c, i) => {
+        return (
+          <span
+            key={i}
+            ref={i === typed.length ? current : undefined}
+            className={
+              (i < typed.length
+                ? typed[i] === c
+                  ? 'correct'
+                  : 'incorrect'
+                : '') + (i === typed.length ? ' caret' : '')
+            }
+          >
+            {displayCharacter(c, typed[i])}
+          </span>
+        );
+      }),
+    [target, typed],
+  );
+  const untimed = !racing && duration === 0;
   const result = stats(target, typed, elapsed, attempts, errors);
   const remaining = racing
     ? (race.remaining ?? 60)
-    : Math.max(0, duration - elapsed);
+    : untimed
+      ? elapsed
+      : Math.max(0, duration - elapsed);
   const mine = race.players?.find((p) => p.id === race.id);
   const opponent = race.players?.find((p) => p.id !== race.id);
 
@@ -100,7 +140,8 @@ export default function Home() {
     phase,
     wpm: racing ? (mine?.wpm ?? 0) : result.wpm,
     accuracy: racing ? (mine?.accuracy ?? 100) : result.accuracy,
-    remaining,
+    remaining: untimed ? null : remaining,
+    elapsed,
   };
   useEffect(() => {
     const context = (
@@ -157,6 +198,32 @@ export default function Home() {
     }
     return () => lifecycle.abort();
   }, []);
+  async function getSession() {
+    const response = await fetch('/api/session', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (!response.ok)
+      throw new Error(`浏览器身份分配失败 (${response.status})`);
+    const data = await response.json();
+    if (
+      !data ||
+      typeof data !== 'object' ||
+      !('id' in data) ||
+      typeof data.id !== 'string'
+    )
+      throw new Error('服务器返回了无效的浏览器身份');
+    return data as { id: string };
+  }
+  useEffect(() => {
+    const pending = getSession();
+    session.current = pending;
+    void pending.catch((error: unknown) => {
+      console.error('Browser session failed', error);
+      if (session.current === pending) session.current = null;
+      setNotice('无法取得浏览器身份，匹配时可手动重试。');
+    });
+  }, []);
   useEffect(() => {
     try {
       const raw = localStorage.getItem('typeflow.history');
@@ -191,12 +258,12 @@ export default function Home() {
   useEffect(() => {
     if (phase !== 'running' || racing) return;
     const timer = setInterval(() => {
-      const next = Math.min(
+      const clock = practiceClock(
         duration,
         (performance.now() - start.current) / 1000,
       );
-      setElapsed(next);
-      if (next >= duration) setPhase('done');
+      setElapsed(clock.elapsed);
+      if (clock.done) setPhase('done');
     }, 100);
     return () => clearInterval(timer);
   }, [phase, duration, racing]);
@@ -235,8 +302,51 @@ export default function Home() {
     selectedPassage.title,
   ]);
   useEffect(() => {
-    current.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [typed]);
+    const viewport = passage.current;
+    const caret = current.current;
+    if (!viewport) return;
+    if (!typed.length) {
+      cancelAnimationFrame(scrollAnimation.current);
+      viewport.scrollTop = 0;
+      scrollDestination.current = 0;
+      return;
+    }
+    if (!caret) return;
+    const lineHeight = parseFloat(getComputedStyle(viewport).lineHeight);
+    const top = caret.offsetTop;
+    const destination = scrollDestination.current;
+    // Keep previous lines visible. Do not restart an animation on every keystroke.
+    if (
+      top >= destination &&
+      top + lineHeight <= destination + viewport.clientHeight - lineHeight / 2
+    )
+      return;
+    const next = Math.max(
+      0,
+      Math.min(
+        viewport.scrollHeight - viewport.clientHeight,
+        top - viewport.clientHeight + lineHeight * 2,
+      ),
+    );
+    if (next === destination) return;
+    cancelAnimationFrame(scrollAnimation.current);
+    scrollDestination.current = next;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      viewport.scrollTop = next;
+      return;
+    }
+    const from = viewport.scrollTop;
+    const started = performance.now();
+    function animate(now: number) {
+      const progress = Math.min(1, (now - started) / 550);
+      viewport!.scrollTop =
+        from + (next - from) * (1 - Math.pow(1 - progress, 3));
+      if (progress < 1)
+        scrollAnimation.current = requestAnimationFrame(animate);
+    }
+    scrollAnimation.current = requestAnimationFrame(animate);
+  }, [typed, target]);
+  useEffect(() => () => cancelAnimationFrame(scrollAnimation.current), []);
   function reset() {
     setTyped('');
     setDraft('');
@@ -248,9 +358,16 @@ export default function Home() {
     saved.current = false;
   }
   function leaveRace() {
+    matchRequest.current++;
+    matchIntent.current = false;
     const ws = socket.current;
-    socket.current = null;
-    ws?.close();
+    if (ws?.readyState === WebSocket.OPEN) {
+      leaving.current = true;
+      ws.send(JSON.stringify({ type: 'leave' }));
+    } else if (ws) {
+      socket.current = null;
+      ws.close();
+    }
     setRace({ type: 'idle' });
     reset();
   }
@@ -286,7 +403,7 @@ export default function Home() {
     if (
       !racing &&
       phase === 'running' &&
-      (now - start.current) / 1000 >= duration
+      practiceClock(duration, (now - start.current) / 1000).done
     ) {
       setElapsed(duration);
       setPhase('done');
@@ -324,29 +441,64 @@ export default function Home() {
       setPhase('done');
     }
   }
-  function match() {
-    leaveRace();
+  async function match() {
+    const request = ++matchRequest.current;
+    reset();
     setNotice('');
+    matchIntent.current = true;
     setRace({ type: 'connecting' });
+    try {
+      session.current ??= getSession();
+      await session.current;
+    } catch (error) {
+      console.error('Match session failed', error);
+      session.current = null;
+      if (!matchIntent.current || request !== matchRequest.current) return;
+      matchIntent.current = false;
+      setRace({ type: 'error', message: '无法取得浏览器身份，请手动重试。' });
+      return;
+    }
+    if (!matchIntent.current || request !== matchRequest.current) return;
+    if (socket.current?.readyState === WebSocket.OPEN) {
+      if (!leaving.current)
+        socket.current.send(JSON.stringify({ type: 'join' }));
+      return;
+    }
     const ws = new WebSocket(
       `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`,
     );
     socket.current = ws;
-    ws.onopen = () =>
-      ws.send(
-        JSON.stringify({ type: 'join', name: name.trim() || '键盘旅人' }),
-      );
+    leaving.current = false;
+    ws.onopen = () => {
+      if (socket.current === ws && matchIntent.current)
+        ws.send(JSON.stringify({ type: 'join' }));
+    };
     ws.onmessage = (event) => {
       if (socket.current !== ws) return;
       try {
         const data: Race = JSON.parse(event.data);
+        if (data.type === 'idle') {
+          leaving.current = false;
+          if (matchIntent.current) ws.send(JSON.stringify({ type: 'join' }));
+          return;
+        }
+        if (
+          !matchIntent.current ||
+          leaving.current ||
+          data.type === 'connected'
+        )
+          return;
         setRace((previous) => ({ ...previous, ...data }));
         if (data.type === 'running') {
           setPhase('running');
           setElapsed(60 - (data.remaining ?? 60));
         }
-        if (data.type === 'done') setPhase('done');
+        if (data.type === 'done') {
+          matchIntent.current = false;
+          setPhase('done');
+        }
         if (data.type === 'error' || data.type === 'cancelled') {
+          matchIntent.current = false;
           setNotice(data.message ?? '比赛已中止');
           setPhase('ready');
         }
@@ -360,12 +512,15 @@ export default function Home() {
     };
     ws.onerror = () => {
       if (socket.current !== ws) return;
-      setNotice('无法连接竞赛服务，请稍后手动重试。');
+      setNotice(
+        '无法连接竞赛服务，请确认网络并关闭本浏览器其他对战标签页，再手动重试。',
+      );
       setRace({ type: 'error' });
     };
     ws.onclose = () => {
       if (socket.current === ws) {
         socket.current = null;
+        matchIntent.current = false;
         setRace((previous) =>
           previous.type === 'done' ||
           previous.type === 'cancelled' ||
@@ -473,14 +628,7 @@ export default function Home() {
                 <span>英文 · 60 秒 · 实时成绩</span>
               </div>
               <div>
-                <input
-                  aria-label="比赛昵称"
-                  placeholder="你的昵称"
-                  maxLength={20}
-                  value={name}
-                  disabled={activeRace}
-                  onChange={(e) => setName(e.target.value)}
-                />
+                <span className="anonymous-label">无需登录 · 即点即匹配</span>
                 <button
                   className="primary"
                   onClick={activeRace ? leaveRace : match}
@@ -531,7 +679,7 @@ export default function Home() {
                 <div className="settings">
                   <div className="setting-group">
                     <Clock3 size={16} />
-                    {[15, 30, 60, 120].map((n) => (
+                    {[0, 15, 30, 60, 120].map((n) => (
                       <button
                         key={n}
                         disabled={racing || phase === 'running'}
@@ -541,8 +689,8 @@ export default function Home() {
                           reset();
                         }}
                       >
-                        {n}
-                        <span>s</span>
+                        {n === 0 ? '全文' : n}
+                        {n !== 0 && <span>s</span>}
                       </button>
                     ))}
                   </div>
@@ -559,7 +707,13 @@ export default function Home() {
                         }
                         onClick={() => {
                           setLanguage(l);
-                          setPassageIndex(0);
+                          setPassageIndex(
+                            l === 'chinese'
+                              ? passages.chinese.findIndex(
+                                  (p) => p.id === 'yueyang',
+                                )
+                              : 0,
+                          );
                           reset();
                         }}
                       >
@@ -582,29 +736,45 @@ export default function Home() {
                       <label htmlFor="passage-select">
                         文章库 <span>{passages[language].length} 篇</span>
                       </label>
-                      <NativeSelect
-                        id="passage-select"
-                        className="article-select"
-                        value={passageIndex}
+                      <Combobox
+                        key={language}
+                        items={passages[language]}
+                        value={selectedPassage}
+                        itemToStringLabel={(p) => p.title}
                         disabled={phase === 'running'}
-                        onChange={(e) => {
-                          setPassageIndex(Number(e.target.value));
+                        onValueChange={(value) => {
+                          if (!value) return;
+                          setPassageIndex(passages[language].indexOf(value));
                           reset();
                         }}
                       >
-                        {categories.map((category) => (
-                          <NativeSelectOptGroup key={category} label={category}>
-                            {passages[language].map(
-                              (p, i) =>
-                                p.category === category && (
-                                  <NativeSelectOption key={p.id} value={i}>
-                                    {p.title}
-                                  </NativeSelectOption>
-                                ),
+                        <ComboboxInput
+                          id="passage-select"
+                          className="article-picker"
+                          placeholder="搜索文章…"
+                        />
+                        <ComboboxContent className="article-picker-popup">
+                          <div className="picker-heading">
+                            挑一篇，慢慢来{' '}
+                            <span>{passages[language].length} 篇文章</span>
+                          </div>
+                          <ComboboxEmpty>没有找到这篇文章</ComboboxEmpty>
+                          <ComboboxList>
+                            {(p: typeof selectedPassage) => (
+                              <ComboboxItem
+                                key={p.id}
+                                value={p}
+                                className="article-picker-item"
+                              >
+                                <span>{p.title}</span>
+                                <small>
+                                  {p.text.length.toLocaleString()} 字符
+                                </small>
+                              </ComboboxItem>
                             )}
-                          </NativeSelectOptGroup>
-                        ))}
-                      </NativeSelect>
+                          </ComboboxList>
+                        </ComboboxContent>
+                      </Combobox>
                       <button
                         className="shuffle-passage"
                         disabled={phase === 'running'}
@@ -622,8 +792,12 @@ export default function Home() {
                       </button>
                     </div>
                     <p>
-                      {selectedPassage.source} · {selectedPassage.text.length}{' '}
-                      字符<span>输完全文或时间结束后结算</span>
+                      {selectedPassage.text.length.toLocaleString()} 字符
+                      <span>
+                        {untimed
+                          ? '全文模式 · 不限时，输入完成后结算'
+                          : '限时练习 · 全文内容保留'}
+                      </span>
                     </p>
                   </div>
                 )}
@@ -648,7 +822,7 @@ export default function Home() {
                   </div>
                   <div className="metric">
                     <span>
-                      <Clock3 size={15} /> 剩余时间
+                      <Clock3 size={15} /> {untimed ? '已用时间' : '剩余时间'}
                     </span>
                     <strong className="time">
                       {Math.ceil(remaining)}
@@ -673,22 +847,8 @@ export default function Home() {
                   <span id="accessible-passage" className="sr-only">
                     练习文字：{target}
                   </span>
-                  <div className="passage" aria-hidden="true">
-                    {target.split('').map((c, i) => (
-                      <span
-                        key={i}
-                        ref={i === typed.length ? current : undefined}
-                        className={
-                          (i < typed.length
-                            ? typed[i] === c
-                              ? 'correct'
-                              : 'incorrect'
-                            : '') + (i === typed.length ? ' caret' : '')
-                        }
-                      >
-                        {c}
-                      </span>
-                    ))}
+                  <div ref={passage} className="passage" aria-hidden="true">
+                    {passageCharacters}
                   </div>
                   <textarea
                     ref={input}
@@ -780,7 +940,7 @@ export default function Home() {
                 <div className="time-track">
                   <div
                     style={{
-                      width: `${phase === 'ready' ? 0 : (1 - remaining / (racing ? 60 : duration)) * 100}%`,
+                      width: `${untimed ? result.progress : phase === 'ready' ? 0 : (1 - remaining / (racing ? 60 : duration)) * 100}%`,
                     }}
                   />
                 </div>
