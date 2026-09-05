@@ -69,6 +69,38 @@ type Race = {
   winner?: string | null;
   message?: string;
 };
+type DeviceProfile = {
+  width: number;
+  height: number;
+  pixelRatio: number;
+  touch: number;
+  touchEvent: boolean;
+  coarsePointer: boolean;
+  motion: boolean;
+  renderer: string | null;
+};
+function readDeviceProfile(): DeviceProfile {
+  let renderer: string | null = null;
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl');
+    const extension = gl?.getExtension('WEBGL_debug_renderer_info');
+    if (gl && extension)
+      renderer = String(gl.getParameter(extension.UNMASKED_RENDERER_WEBGL));
+  } catch (error) {
+    console.warn('WebGL renderer detection failed', error);
+  }
+  return {
+    width: Math.round(screen.width),
+    height: Math.round(screen.height),
+    pixelRatio: devicePixelRatio,
+    touch: navigator.maxTouchPoints,
+    touchEvent: 'ontouchstart' in window,
+    coarsePointer: matchMedia('(pointer: coarse)').matches,
+    motion: 'DeviceMotionEvent' in window || 'DeviceOrientationEvent' in window,
+    renderer,
+  };
+}
 const languageNames: Record<Language, string> = {
   english: '英文',
   chinese: '中文',
@@ -91,10 +123,12 @@ export default function Home() {
   const [focused, setFocused] = useState(false);
   const [sound, setSound] = useState(false);
   const [help, setHelp] = useState(false);
+  const [crossPlatform, setCrossPlatform] = useState(false);
   const session = useRef<Promise<{ id: string }> | null>(null);
   const matchIntent = useRef(false);
   const matchRequest = useRef(0);
   const leaving = useRef(false);
+  const joinPayload = useRef('');
   const passage = useRef<HTMLDivElement>(null);
   const scrollAnimation = useRef(0);
   const scrollDestination = useRef(0);
@@ -437,6 +471,11 @@ export default function Home() {
   }
   async function match() {
     const request = ++matchRequest.current;
+    joinPayload.current = JSON.stringify({
+      type: 'join',
+      crossPlatform,
+      device: readDeviceProfile(),
+    });
     reset();
     setNotice('');
     matchIntent.current = true;
@@ -454,8 +493,7 @@ export default function Home() {
     }
     if (!matchIntent.current || request !== matchRequest.current) return;
     if (socket.current?.readyState === WebSocket.OPEN) {
-      if (!leaving.current)
-        socket.current.send(JSON.stringify({ type: 'join' }));
+      if (!leaving.current) socket.current.send(joinPayload.current);
       return;
     }
     const ws = new WebSocket(
@@ -465,7 +503,7 @@ export default function Home() {
     leaving.current = false;
     ws.onopen = () => {
       if (socket.current === ws && matchIntent.current)
-        ws.send(JSON.stringify({ type: 'join' }));
+        ws.send(joinPayload.current);
     };
     ws.onmessage = (event) => {
       if (socket.current !== ws) return;
@@ -473,7 +511,7 @@ export default function Home() {
         const data: Race = JSON.parse(event.data);
         if (data.type === 'idle') {
           leaving.current = false;
-          if (matchIntent.current) ws.send(JSON.stringify({ type: 'join' }));
+          if (matchIntent.current) ws.send(joinPayload.current);
           return;
         }
         if (
@@ -622,7 +660,15 @@ export default function Home() {
                 <span>英文 · 60 秒 · 实时成绩</span>
               </div>
               <div>
-                <span className="anonymous-label">无需登录 · 即点即匹配</span>
+                <label className="cross-platform-option">
+                  <input
+                    type="checkbox"
+                    checked={crossPlatform}
+                    disabled={activeRace}
+                    onChange={(event) => setCrossPlatform(event.target.checked)}
+                  />
+                  跨平台匹配
+                </label>
                 <button
                   className="primary"
                   onClick={activeRace ? leaveRace : match}
@@ -632,6 +678,11 @@ export default function Home() {
                 </button>
               </div>
             </div>
+            {crossPlatform && (
+              <p className="cross-platform-warning">
+                将会匹配到其他设备平台的用户；这可以加快匹配速度，但并不公平。
+              </p>
+            )}
             <div className="race-status" role="status">
               {
                 (
@@ -1008,7 +1059,9 @@ export default function Home() {
                     <ChartTooltip
                       content={
                         <ChartTooltipContent
-                          labelFormatter={(value) => `第 ${String(value)} 次练习`}
+                          labelFormatter={(value) =>
+                            `第 ${String(value)} 次练习`
+                          }
                           formatter={(value) => `${String(value)} CPM`}
                         />
                       }

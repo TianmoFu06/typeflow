@@ -1,6 +1,6 @@
 services:
   typeflow:
-    image: ${IMAGE:?Set IMAGE to an immutable registry digest or commit tag}
+    image: registry.huangyut1ng.com/typeflow:latest
     init: true
     restart: "no"
     environment:

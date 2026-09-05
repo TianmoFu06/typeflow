@@ -17,8 +17,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    outputs:
-      image: ${{ steps.image.outputs.value }}
     steps:
       - name: 检出项目源码
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -62,21 +60,17 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: registry.huangyut1ng.com/typeflow:sha-${{ steps.tag.outputs.sha }}
+          tags: |
+            registry.huangyut1ng.com/typeflow:latest
+            registry.huangyut1ng.com/typeflow:sha-${{ steps.tag.outputs.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
-      - name: 记录部署镜像摘要
-        id: image
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: echo "value=registry.huangyut1ng.com/typeflow@$DIGEST" >> "$GITHUB_OUTPUT"
       - name: Release summary
-        env:
-          IMAGE: ${{ steps.image.outputs.value }}
         run: |
-          echo "Published image: \`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Published image: `registry.huangyut1ng.com/typeflow:latest`' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Traceable tag: `registry.huangyut1ng.com/typeflow:sha-${{ steps.tag.outputs.sha }}`' >> "$GITHUB_STEP_SUMMARY"
   deploy:
     name: 部署生产环境
     needs: publish
@@ -89,14 +83,13 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: Deploy immutable image over SSH
+      - name: Deploy latest image over SSH
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           APP_ORIGIN: ${{ vars.APP_ORIGIN }}
-          IMAGE: ${{ needs.publish.outputs.image }}
           REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
           REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
         run: |
@@ -116,7 +109,7 @@ jobs:
           ssh "$DEPLOY_USER@$DEPLOY_HOST" 'mkdir -p ~/typeflow/scripts'
           scp compose.yaml "$DEPLOY_USER@$DEPLOY_HOST:typeflow/compose.yaml"
           scp scripts/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:typeflow/scripts/deploy.sh"
-          printf 'IMAGE=%s\nAPP_ORIGIN=%s\n' "$IMAGE" "$APP_ORIGIN" | ssh "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > ~/typeflow/.env'
+          printf 'APP_ORIGIN=%s\n' "$APP_ORIGIN" | ssh "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > ~/typeflow/.env'
           printf '%s' "$REGISTRY_PASSWORD" | ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker login registry.huangyut1ng.com --username '$REGISTRY_USERNAME' --password-stdin"
           ssh "$DEPLOY_USER@$DEPLOY_HOST" 'bash ~/typeflow/scripts/deploy.sh'
           curl --fail --show-error --max-time 20 "$APP_ORIGIN/api/health"

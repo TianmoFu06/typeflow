@@ -10,7 +10,8 @@
 - 所有模式显示 CPM（每分钟正确字符数）、正确率与计时。
 - 实际错字红色显示、550ms 按行缓动、退格修正、输入法支持、禁用粘贴、按键音、Esc 重开。
 - 最近 50 次本机成绩、最佳速度与 CPM 进步曲线；横轴为最近记录内的练习序号，从旧到新排列，不上传个人练习记录。
-- 真实双人英文匹配，3 秒准备、60 秒竞赛；服务端随机选择同一篇文章并扩展到足够长度，统一计时和计分。
+- 真实双人英文匹配，按 UA、分辨率、触摸、传感器和 WebGL 等信号的加权结果优先匹配相近设备；可由双方自愿开启跨平台匹配。
+- 3 秒准备、60 秒竞赛；服务端随机选择同一篇文章并扩展到足够长度，统一计时和计分。
 - 匹配状态、实时双方进度、胜负、断线取消、心跳、输入验证、同源检查及限速。
 - 响应式布局、键盘操作、屏幕阅读器文字和减少动画偏好。
 
@@ -45,22 +46,23 @@ APP_ORIGIN=http://localhost:3000 NODE_ENV=production npm start
 
 仓库 **Settings → Secrets and variables → Actions → Secrets** 添加：
 
-| Secret | 用途 |
-| --- | --- |
+| Secret              | 用途                                  |
+| ------------------- | ------------------------------------- |
 | `REGISTRY_USERNAME` | `registry.huangyut1ng.com` 的推送账号 |
-| `REGISTRY_PASSWORD` | 对应密码或机器人令牌 |
+| `REGISTRY_PASSWORD` | 对应密码或机器人令牌                  |
 
 确保账号有 `typeflow` 镜像路径的推送权限，registry 提供有效 HTTPS 证书且 GitHub 托管 runner 可以访问。
 
 CI 对 PR 和 main 提交执行 YAML 语法／格式检查、测试、类型检查、构建、ShellCheck、Compose 校验、Docker 构建和容器健康／首页检查。只有本仓库 main 的 push CI 成功才会自动触发 Release；PR 不发布。
 
-Release 构建 `linux/amd64` 和 `linux/arm64` 镜像，上传 SBOM 与来源证明，以完整提交 SHA 打标签：
+Release 构建 `linux/amd64` 和 `linux/arm64` 镜像，上传 SBOM 与来源证明，同时发布部署用的 `latest` 和用于追溯的完整提交 SHA 标签：
 
 ```text
+registry.huangyut1ng.com/typeflow:latest
 registry.huangyut1ng.com/typeflow:sha-<完整提交 SHA>
 ```
 
-发布结果中的 digest 为部署提供不可变引用；不使用易漂移的 latest 标签。Secrets 配置完成后，在 **Actions → Release → Run workflow → main** 手动运行，手动发布同样重新校验源码。缺少 Secrets 会明确失败，不降级为其他 registry。
+部署固定使用 `latest`，脚本每次都会从仓库重新拉取；SHA 标签保留用于审计和人工定位版本。Secrets 配置完成后，在 **Actions → Release → Run workflow → main** 手动运行，手动发布同样重新校验源码。缺少 Secrets 会明确失败，不降级为其他 registry。
 
 ## Docker 部署
 
@@ -69,11 +71,11 @@ registry.huangyut1ng.com/typeflow:sha-<完整提交 SHA>
 ```sh
 docker login registry.huangyut1ng.com
 cp .env.example .env
-# 编辑 .env：设置 IMAGE 为发布输出的 digest，APP_ORIGIN 为实际域名
+# 编辑 .env：将 APP_ORIGIN 设置为实际域名
 bash scripts/deploy.sh
 ```
 
-`.env.example` 中的 `IMAGE` 故意留空。在 **Actions → Release → 成功的运行 → Summary** 复制 `Published image` 的完整值，填入服务器 `.env` 的 `IMAGE=` 后面。不要使用 `REPLACE_WITH_FULL_COMMIT_SHA`，也不要直接取尚未发布的最新 Git 提交。旧配置含有该占位符时，部署脚本会在拉取镜像前明确报错。
+Compose 已固定使用 `registry.huangyut1ng.com/typeflow:latest`，无需在 `.env` 中填写镜像 digest 或标签。
 
 容器默认只绑定 `127.0.0.1:3000`，配合现有 HTTPS 反向代理；示例见 `scripts/nginx.conf`。本地试用可设 `APP_ORIGIN=http://localhost:3000`。公网部署必须使用实际 HTTPS 来源并转发 WebSocket Upgrade。来源不匹配会拒绝比赛连接。
 
@@ -92,21 +94,21 @@ docker run --rm -p 3000:3000 -e APP_ORIGIN=http://localhost:3000 typeflow:local
 
 默认仅自动发布镜像，不会猜测服务器。需要 CD 时配置以下仓库 **Variables**：
 
-| Variable | 值 |
-| --- | --- |
-| `DEPLOY_ENABLED` | `true` |
-| `APP_ORIGIN` | 例如 `https://typing.example.com`，不带末尾斜线 |
+| Variable         | 值                                              |
+| ---------------- | ----------------------------------------------- |
+| `DEPLOY_ENABLED` | `true`                                          |
+| `APP_ORIGIN`     | 例如 `https://typing.example.com`，不带末尾斜线 |
 
 再添加以下 **Secrets**：
 
-| Secret | 内容 |
-| --- | --- |
-| `DEPLOY_HOST` | SSH 主机名或 IPv4，默认端口 22 |
-| `DEPLOY_USER` | 专用部署用户，可执行 Docker |
-| `DEPLOY_SSH_KEY` | 该用户的 SSH 私钥 |
+| Secret               | 内容                               |
+| -------------------- | ---------------------------------- |
+| `DEPLOY_HOST`        | SSH 主机名或 IPv4，默认端口 22     |
+| `DEPLOY_USER`        | 专用部署用户，可执行 Docker        |
+| `DEPLOY_SSH_KEY`     | 该用户的 SSH 私钥                  |
 | `DEPLOY_KNOWN_HOSTS` | 事先通过可信渠道核实的主机公钥记录 |
 
-配置 `production` GitHub Environment，可按需添加审批规则。工作流将 Compose、脚本和当前镜像 digest 部署到服务器 `~/typeflow`，等待容器健康后检查公网 `/api/health`。该目录由工作流管理，`.env` 会更新；需要自定义部署目录或 SSH 端口时显式修改工作流。部署前须配置 HTTPS 代理、DNS、Docker 和目录权限；不自动安装系统组件。
+配置 `production` GitHub Environment，可按需添加审批规则。工作流将 Compose 和脚本部署到服务器 `~/typeflow`，自动拉取 `latest` 镜像，等待容器健康后检查公网 `/api/health`。该目录由工作流管理，`.env` 会更新；需要自定义部署目录或 SSH 端口时显式修改工作流。部署前须配置 HTTPS 代理、DNS、Docker 和目录权限；不自动安装系统组件。
 
 ## 计分与边界
 
@@ -116,7 +118,7 @@ docker run --rm -p 3000:3000 -e APP_ORIGIN=http://localhost:3000 typeflow:local
 - 竞赛采用英文逐字输入，禁止批量粘贴；这是休闲匹配，并非防机器人竞技系统，不声称可以阻止自动化作弊。
 - **单进程单副本**，500 个连接上限。房间和队列在内存，重启不保留比赛；扩展多副本前需共享比赛协调器。
 - 无登录：首次访问 `/api/session`，服务端生成私有随机浏览器令牌，以 HttpOnly、SameSite=Strict Cookie 保存一年；HTTPS 部署附加 Secure。服务端从令牌派生稳定 UUID，仅公开 UUID，不公开令牌；刷新及服务重启保持身份，清除 Cookie 后重新分配。
-- WS 握手使用该 Cookie，同一浏览器只允许一条对战连接，避免自己匹配自己。连接保持期间，`join` 进入队列，`leave` 取消；只有主动排队的两人配对，比赛结束后可复用连接再次匹配。断线明确提示，手动重试。
+- WS 握手使用该 Cookie，同一浏览器只允许一条对战连接，避免自己匹配自己。连接保持期间，`join` 会携带本机设备能力进入队列，服务端以连续的移动端倾向分数选择最接近的对手；只有双方都勾选“跨平台匹配”才会放宽设备差异限制。`leave` 取消排队，比赛结束后可复用连接再次匹配。断线明确提示，手动重试。
 - 无账号、全球排行榜或跨设备历史；浏览器令牌只是匿名设备身份，不用于有价值资产的账户认证。
 - 浏览器本机记录仅保留最近 50 次，删除浏览器数据会清空；存储读写错误会在页面明确提示。
 

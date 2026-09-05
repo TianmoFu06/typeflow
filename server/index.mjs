@@ -24,6 +24,45 @@ function browserId(token) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+export function mobileLikelihood(userAgent, device) {
+  if (
+    !device ||
+    typeof device !== "object" ||
+    !Number.isInteger(device.width) ||
+    device.width < 1 ||
+    device.width > 20_000 ||
+    !Number.isInteger(device.height) ||
+    device.height < 1 ||
+    device.height > 20_000 ||
+    typeof device.pixelRatio !== "number" ||
+    !Number.isFinite(device.pixelRatio) ||
+    device.pixelRatio < 0.5 ||
+    device.pixelRatio > 10 ||
+    typeof device.touch !== "number" ||
+    !Number.isInteger(device.touch) ||
+    device.touch < 0 ||
+    device.touch > 100 ||
+    typeof device.touchEvent !== "boolean" ||
+    typeof device.coarsePointer !== "boolean" ||
+    typeof device.motion !== "boolean" ||
+    (device.renderer !== null &&
+      (typeof device.renderer !== "string" || device.renderer.length > 200))
+  )
+    throw new Error("设备信息无效");
+  let score = 0.5;
+  if (/Mobile|Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(userAgent)) score += 0.35;
+  else if (/Windows NT|Macintosh|X11|CrOS/i.test(userAgent)) score -= 0.2;
+  const shortSide = Math.min(device.width, device.height);
+  score += shortSide <= 820 ? 0.2 : shortSide >= 1000 ? -0.12 : 0;
+  score += device.touch > 0 || device.touchEvent ? 0.2 : -0.1;
+  score += device.coarsePointer ? 0.15 : -0.05;
+  if (device.pixelRatio >= 2) score += 0.05;
+  if (device.motion) score += 0.05;
+  if (/Adreno|Mali|PowerVR|Apple A\d|Apple GPU/i.test(device.renderer ?? "")) score += 0.1;
+  else if (/NVIDIA|GeForce|Radeon|Intel/i.test(device.renderer ?? "")) score -= 0.08;
+  return Math.round(Math.max(0, Math.min(1, score)) * 100) / 100;
+}
+
 export function createApp({
   duration = 60_000,
   countdown = 3000,
@@ -32,14 +71,18 @@ export function createApp({
   root = resolve("web/dist/client"),
 } = {}) {
   const players = new Map(),
-    rooms = new Set();
-  let waiting;
+    rooms = new Set(),
+    waiting = [];
   const log = (error, context) =>
     console.error(
       JSON.stringify({ level: "error", message: error.message, stack: error.stack, context }),
     );
   const send = (player, data) => {
     if (player.ws.readyState === WebSocket.OPEN) player.ws.send(JSON.stringify(data));
+  };
+  const removeWaiting = (player) => {
+    const index = waiting.indexOf(player);
+    if (index !== -1) waiting.splice(index, 1);
   };
   const server = createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -197,7 +240,7 @@ export function createApp({
     );
     ws.on("close", () => {
       players.delete(p.id);
-      if (waiting === p) waiting = undefined;
+      removeWaiting(p);
       if (p.room) finish(p.room, "对手已断开连接，本场比赛中止，请重新匹配。");
     });
     ws.on("message", (raw) => {
@@ -212,7 +255,7 @@ export function createApp({
         payload = JSON.parse(raw.toString());
         if (!payload || typeof payload !== "object") throw new Error("消息必须为对象");
         if (payload.type === "leave") {
-          if (waiting === p) waiting = undefined;
+          removeWaiting(p);
           if (p.room) finish(p.room, "玩家取消了比赛，请重新匹配。");
           p.joined = false;
           send(p, { type: "idle", id: p.id });
@@ -220,16 +263,30 @@ export function createApp({
         }
         if (payload.type === "join") {
           if (p.joined) throw new Error("你已在匹配队列或比赛中");
+          if (typeof payload.crossPlatform !== "boolean") throw new Error("跨平台选项无效");
+          p.mobile = mobileLikelihood(req.headers["user-agent"] ?? "", payload.device);
+          p.crossPlatform = payload.crossPlatform;
           p.joined = true;
           p.name = `旅人 ${p.id.slice(0, 6)}`;
           p.text = "";
-          if (!waiting) {
-            waiting = p;
+          const candidates = waiting
+            .map((candidate, index) => ({
+              candidate,
+              index,
+              distance: Math.abs(candidate.mobile - p.mobile),
+            }))
+            .filter(
+              ({ candidate, distance }) =>
+                distance <= 0.35 || (candidate.crossPlatform && p.crossPlatform),
+            )
+            .sort((a, b) => a.distance - b.distance || a.index - b.index);
+          if (!candidates.length) {
+            waiting.push(p);
             send(p, { type: "waiting", id: p.id });
             return;
           }
-          const other = waiting;
-          waiting = undefined;
+          const other = candidates[0].candidate;
+          removeWaiting(other);
           // ponytail: single-process matchmaking; use a shared coordinator before adding replicas.
           const article = passages.english[randomInt(passages.english.length)];
           const room = {

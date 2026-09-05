@@ -5,7 +5,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-test("deployment rejects placeholder images before pulling and propagates config errors", async () => {
+test("compose deploys the latest image without an IMAGE environment value", async () => {
+  const compose = await readFile(new URL("../compose.yaml", import.meta.url), "utf8");
+  const example = await readFile(new URL("../.env.example", import.meta.url), "utf8");
+  assert.match(compose, /image: registry\.huangyut1ng\.com\/typeflow:latest/);
+  assert.doesNotMatch(compose, /\$\{IMAGE/);
+  assert.doesNotMatch(example, /^IMAGE=/m);
+});
+
+test("deployment always pulls latest and propagates config errors", async () => {
   const root = await mkdtemp(join(tmpdir(), "typeflow-deploy-"));
   try {
     await mkdir(join(root, "scripts"));
@@ -19,17 +27,13 @@ test("deployment rejects placeholder images before pulling and propagates config
       `#!/usr/bin/env bash
 set -eu
 echo "$*" >> "$CALLS"
-case "$*" in
-  "compose config --quiet") exit "$CONFIG_EXIT" ;;
-  "compose config --images") echo "$TEST_IMAGE" ;;
-esac
+if [[ "$*" == "compose config --quiet" ]]; then exit "$CONFIG_EXIT"; fi
 `,
       { mode: 0o755 },
     );
-    for (const [image, configExit, expected] of [
-      ["registry.huangyut1ng.com/typeflow:sha-REPLACE_WITH_FULL_COMMIT_SHA", "0", 1],
-      ["", "12", 12],
-      ["registry.huangyut1ng.com/typeflow@sha256:" + "a".repeat(64), "0", 0],
+    for (const [configExit, expected] of [
+      ["12", 12],
+      ["0", 0],
     ]) {
       const calls = join(root, "calls");
       await writeFile(calls, "");
@@ -39,16 +43,13 @@ esac
           ...process.env,
           PATH: `${root}:${process.env.PATH}`,
           CALLS: calls,
-          TEST_IMAGE: image,
           CONFIG_EXIT: configExit,
         },
       });
       assert.equal(result.status, expected, result.stderr);
       const commands = await readFile(calls, "utf8");
-      assert.equal(commands.includes("compose pull"), expected === 0);
+      assert.equal(commands.includes("compose pull --policy always typeflow"), expected === 0);
       assert.equal(commands.includes("compose up"), expected === 0);
-      if (expected === 1)
-        assert.match(result.stderr, /IMAGE still contains an example placeholder/);
     }
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -79,6 +79,8 @@ test("article library has distinct presets and preserves user-provided texts", a
   }
   assert.match(passages.chinese.find((p) => p.id === "kang-live").text, /明天再玩/);
   assert.doesNotMatch(passages.chinese.find((p) => p.id === "kang-live").text, /明天在玩/);
+  assert.match(passages.chinese.find((p) => p.id === "xiake").text, /不要跟法律作对/);
+  assert.doesNotMatch(passages.chinese.find((p) => p.id === "xiake").text, /法律做对/);
   for (const list of Object.values(passages)) {
     for (let current = 0; current < list.length; current++) {
       for (const random of [0, 0.5, 0.99999]) {

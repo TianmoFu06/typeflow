@@ -3,7 +3,33 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { WebSocket } from "ws";
 import { passages } from "../web/lib/typing.mjs";
-import { createApp } from "../server/index.mjs";
+import { createApp, mobileLikelihood } from "../server/index.mjs";
+
+const desktopDevice = {
+  width: 1920,
+  height: 1080,
+  pixelRatio: 1,
+  touch: 0,
+  touchEvent: false,
+  coarsePointer: false,
+  motion: false,
+  renderer: "NVIDIA GeForce",
+};
+const mobileDevice = {
+  width: 390,
+  height: 844,
+  pixelRatio: 3,
+  touch: 5,
+  touchEvent: true,
+  coarsePointer: true,
+  motion: true,
+  renderer: "Apple GPU",
+};
+const join = (device = desktopDevice, crossPlatform = false) => ({
+  type: "join",
+  device,
+  crossPlatform,
+});
 
 async function fixture(t, options = {}) {
   const app = createApp({ duration: 300, countdown: 70, tick: 10, ...options });
@@ -20,7 +46,7 @@ async function fixture(t, options = {}) {
       response,
     };
   }
-  async function player(name, identity) {
+  async function player(name, identity, options = join()) {
     identity ??= await session();
     const ws = new WebSocket(origin.replace("http", "ws") + "/ws", {
       origin,
@@ -29,7 +55,7 @@ async function fixture(t, options = {}) {
     const messages = [];
     ws.on("message", (data) => messages.push(JSON.parse(data)));
     await once(ws, "open");
-    if (name) ws.send(JSON.stringify({ type: "join", name }));
+    if (name) ws.send(JSON.stringify({ ...options, name }));
     t.after(() => ws.terminate());
     async function wait(type, predicate = () => true) {
       const end = Date.now() + 2000;
@@ -61,6 +87,27 @@ test("two real clients match, share text, receive server-calculated results", as
   assert.equal(result.winner, ra.id);
   assert.equal(result.players.find((p) => p.id === ra.id).correct, 1);
   assert.equal((await b.wait("done")).winner, ra.id);
+});
+test("weighted device matching prefers similar platforms unless both players opt in", async (t) => {
+  assert.ok(mobileLikelihood("Mozilla/5.0 (iPhone) Mobile", mobileDevice) > 0.8);
+  assert.ok(mobileLikelihood("Mozilla/5.0 (Windows NT 10.0)", desktopDevice) < 0.2);
+  const { player } = await fixture(t, { duration: 2000 });
+  const desktop = await player("Desktop");
+  await desktop.wait("waiting");
+  const mobile = await player("Mobile", undefined, join(mobileDevice));
+  await mobile.wait("waiting");
+  const anotherDesktop = await player("Desktop 2");
+  await desktop.wait("countdown");
+  await anotherDesktop.wait("countdown");
+  assert.ok(!mobile.messages.some((message) => message.type === "countdown"));
+});
+test("cross-platform matching requires consent from both players", async (t) => {
+  const { player } = await fixture(t, { duration: 2000 });
+  const desktop = await player("Desktop", undefined, join(desktopDevice, true));
+  await desktop.wait("waiting");
+  const mobile = await player("Mobile", undefined, join(mobileDevice, true));
+  await desktop.wait("countdown");
+  await mobile.wait("countdown");
 });
 test("disconnect explicitly cancels opponent race", async (t) => {
   const { player } = await fixture(t, { duration: 2000 });
@@ -117,7 +164,7 @@ test("only queued players match; cancel and rejoin reuse the long connection and
   const b = await player("B");
   await b.wait("waiting");
   a.messages.length = 0;
-  a.ws.send(JSON.stringify({ type: "join", id: b.identity.id }));
+  a.ws.send(JSON.stringify(join()));
   assert.equal((await a.wait("countdown")).id, a.identity.id);
   assert.equal((await b.wait("countdown")).id, b.identity.id);
   a.ws.send(JSON.stringify({ type: "leave" }));
@@ -125,9 +172,9 @@ test("only queued players match; cancel and rejoin reuse the long connection and
   await a.wait("idle");
   a.messages.length = 0;
   b.messages.length = 0;
-  a.ws.send(JSON.stringify({ type: "join" }));
+  a.ws.send(JSON.stringify(join()));
   await a.wait("waiting");
-  b.ws.send(JSON.stringify({ type: "join" }));
+  b.ws.send(JSON.stringify(join()));
   await a.wait("countdown");
   await b.wait("countdown");
 });
@@ -139,9 +186,9 @@ test("completed races can rematch with the same sockets and reset scores", async
   await a.wait("done");
   await b.wait("done");
   a.messages.length = b.messages.length = 0;
-  a.ws.send(JSON.stringify({ type: "join" }));
+  a.ws.send(JSON.stringify(join()));
   await a.wait("waiting");
-  b.ws.send(JSON.stringify({ type: "join" }));
+  b.ws.send(JSON.stringify(join()));
   const next = await a.wait("countdown");
   assert.equal(next.id, a.identity.id);
   assert.ok(next.players.every((p) => p.correct === 0 && p.wpm === 0));
